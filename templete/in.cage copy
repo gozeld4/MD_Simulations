@@ -1,0 +1,131 @@
+# variables
+variable        T  equal  300
+variable	nmolecules equal 100 ## In atm
+
+variable        dt_nvt equal 1
+variable        dt_deposit equal 0.2
+
+variable        nsteps_deposit  equal 100000  
+variable        nsteps_nvt  equal 2000000 
+variable        dump_freq equal 10000
+variable        deposit_freq equal 100
+variable        restart_freq equal 1000
+variable        thermo_freq equal 1000
+
+units           real
+atom_style      full
+boundary        p p p
+neighbor        2.0 bin
+neigh_modify    every 1 delay 1 check no
+box tilt        large
+special_bonds   charmm
+
+pair_style      lj/cut/coul/long 12.5
+kspace_style    ewald 1e-6
+pair_modify     tail yes mix arithmetic
+bond_style      harmonic
+angle_style     hybrid cosine/periodic fourier harmonic
+dihedral_style  harmonic
+improper_style  fourier
+
+# read data file
+read_data       datafile_name extra/atom/types 3 extra/bond/types 2 extra/angle/types 1 
+
+# define groups
+group           mofgroup
+group           watergroup
+
+
+
+molecule        tip4p_molecule water.tip4p offset atom bond angle dihedral improper
+region 		reg block 0 15 0 15 0 15
+
+mass O_type 15.9994  #Input: O type
+mass H_type 1.008  # Input: H type
+mass M_type 1e-12  # Input: M_type
+
+
+## Deposition
+
+fix             1 tip4p rigid/nvt/small molecule temp ${T} ${T} $(100.0*v_dt_deposit) mol tip4p_molecule
+fix_modify      1 dynamic/dof yes
+
+fix             2 linker nvt temp ${T} ${T} $(100.0*v_dt_deposit)
+
+fix             dep tip4p deposit ${nmolecules} 0 ${deposit_freq} 49348 id next near 2.0 units box region reg mol tip4p_molecule rigid 1
+
+
+# lj pair coefficients (uff cage + guest molecules)
+pair_coeff O_type O_type  0.1550	3.1536 # O O
+pair_coeff H_type H_type 0.0000    0.0000 # H H
+pair_coeff M_type M_type 0.0000    0.0000
+
+bond_coeff O-H 5000.00 0.9572 # O H  #Input: O H type
+bond_coeff O-M 5000.00 0.1546 # O M  #Input: O M type 
+angle_coeff <HOH harmonic 500.0 104.52 # H O H #Input: H O H type
+
+# compute temperature for guest species only
+compute        temp_tip4p tip4p temp		    
+
+
+# output
+thermo_style    custom step c_temp_tip4p press pe ke etotal atoms
+thermo          ${thermo_freq}
+thermo_modify   flush yes
+
+dump            1 all custom ${dump_freq} dump_dep.lammpstrj id mol type q x y z
+#dump_modify     1 append yes sort id format line "%d %d %d %8.4f %20.15f %20.15f %20.15f"
+
+# Water insertion
+timestep        ${dt_deposit}
+run             ${nsteps_deposit} 
+
+
+## NVT: Equilibriation
+
+unfix 		dep
+unfix			1
+unfix			2
+undump 		1
+
+fix             1 tip4p rigid/nvt/small molecule temp ${T} ${T} $(100.0*v_dt_nvt) mol tip4p_molecule
+fix_modify      1 dynamic/dof yes
+
+fix             2 linker nvt temp ${T} ${T} $(100.0*v_dt_nvt)
+
+
+compute        temp_tip4p_nvt tip4p temp
+
+thermo_style    custom step c_temp_tip4p_nvt press pe ke etotal ecoul evdwl epair ebond eangle edihed cpu
+thermo          ${thermo_freq}
+thermo_modify   flush yes
+
+reset_timestep  0
+
+timestep        ${dt_nvt}
+run             ${nsteps_nvt}
+
+
+## NVT: Production
+reset_timestep  0
+
+compute        temp_tip4p_nvt tip4p temp
+
+thermo_style    custom step c_temp_tip4p_nvt press pe ke etotal ecoul evdwl epair ebond eangle edihed cpu
+thermo          ${thermo_freq}
+thermo_modify   flush yes
+
+dump            2 all custom ${dump_freq} dump_production.lammpstrj id mol type q x y z
+
+group		xyz_group 
+dump 			 3 xyz_atoms xyz ${dump_freq} production.xyz
+
+restart         ${restart_freq} restart_nvt_a restart_nvt_b
+ 
+timestep        ${dt_nvt}
+run             ${nsteps_nvt}
+
+write_restart   restart.nvt
+
+
+

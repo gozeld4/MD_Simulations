@@ -1,0 +1,38 @@
+# TIP4P/2005 water molecule for use with Lammps deposit
+
+4 atoms
+3 bonds
+1 angles 
+0 dihedrals
+0 impropers
+
+Coords
+#id x y z
+1  0.0000    0.0000    0.0000 # O
+2  0.9572    0.0000    0.0000 # H
+3  -0.2400    0.9266    0.0000 # H
+4  0.0946    0.1222    0.0000	# M
+
+Types
+#id type
+1 1 
+2 2 
+3 2
+4 3
+
+Charges
+#id charge
+1 0.0000
+2 0.5564
+3 0.5564
+4 -1.1128
+
+Masses
+#id mass
+1 15.9994 # O
+2 1.008 # H
+3 1.008 # H
+4 1e-12 # M
+
+
+
